@@ -2,7 +2,7 @@ services:
   db:
     image: pgvector/pgvector:pg16
     container_name: voc-db
-    shm_size: 1g  # HNSW 병렬 빌드 등 공유 메모리 작업용 (기본 64MB로는 부족)
+    shm_size: 1g  # 병렬 쿼리/인덱스 빌드용 공유 메모리 (기본 64MB로는 could not resize shared memory 에러)
     environment:
       POSTGRES_USER: voc
       POSTGRES_PASSWORD: voc
