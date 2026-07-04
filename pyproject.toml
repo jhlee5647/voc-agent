@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "VoC 분석 Slack 챗봇 — LangGraph 기반 리뷰 분석 + 주간 자동 리포트"
 requires-python = ">=3.12"
 dependencies = [
+    "langchain-openai>=1.3.3",
+    "langgraph>=1.2.7",
     "openai>=2.44.0",
     "pgvector>=0.4.2",
     "psycopg[binary]>=3.3.4",
