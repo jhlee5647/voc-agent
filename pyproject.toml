@@ -1,0 +1,18 @@
+[project]
+name = "voc-agent"
+version = "0.1.0"
+description = "VoC 분석 Slack 챗봇 — LangGraph 기반 리뷰 분석 + 주간 자동 리포트"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.8",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100

@@ -1,0 +1,22 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: voc-db
+    environment:
+      POSTGRES_USER: voc
+      POSTGRES_PASSWORD: voc
+      POSTGRES_DB: voc
+    ports:
+      - "5432:5432"
+    volumes:
+      - voc_pgdata:/var/lib/postgresql/data
+      # 최초 기동 시 스키마 자동 적용
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U voc -d voc"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  voc_pgdata:
