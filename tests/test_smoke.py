@@ -10,9 +10,9 @@ def test_schema_defines_core_tables():
     assert "CREATE TABLE IF NOT EXISTS products" in SCHEMA
 
 
-def test_schema_has_embedding_and_hnsw_index():
+def test_schema_has_embedding_and_ivfflat_index():
     assert "embedding         vector(1536)" in SCHEMA
-    assert "USING hnsw (embedding vector_cosine_ops)" in SCHEMA
+    assert "USING ivfflat (embedding vector_cosine_ops)" in SCHEMA
 
 
 def test_schema_has_denormalized_category_columns():
