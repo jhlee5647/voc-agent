@@ -170,6 +170,35 @@ def search_reviews(
     return [dict(zip(columns, row)) for row in rows]
 
 
+# list_metadata kind → 컬럼 (화이트리스트)
+_METADATA_COLUMNS = {
+    "brand": "brand_name",
+    "category": "category_name",
+    "sub_category": "sub_category_name",
+}
+
+
+def list_metadata(
+    conn,
+    kind: str,
+    search: str | None = None,
+    limit: int = 50,
+) -> list[str]:
+    """브랜드/카테고리/중분류 명칭 목록 (리뷰 수 내림차순, ILIKE 부분일치)."""
+    if kind not in _METADATA_COLUMNS:
+        raise ValueError(f"kind는 {sorted(_METADATA_COLUMNS)} 중 하나여야 함: {kind!r}")
+    column = _METADATA_COLUMNS[kind]
+    conds, params = [f"{column} IS NOT NULL"], []
+    if search is not None:
+        conds.append(f"{column} ILIKE %s")
+        params.append(f"%{search}%")
+    sql = (
+        f"SELECT {column} FROM reviews WHERE {' AND '.join(conds)} "
+        f"GROUP BY {column} ORDER BY COUNT(*) DESC LIMIT %s"
+    )
+    return [name for (name,) in conn.execute(sql, [*params, limit]).fetchall()]
+
+
 def _to_result(group, stats, metric: str) -> dict:
     n, avg, neg = stats
     result = {} if group is None else {"group": group}
