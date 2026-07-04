@@ -30,11 +30,14 @@ ROADMAP.md 구현 순서의 각 항목을 시작할 때, 다음을 제시하고 
 - 작성할 테스트 케이스 목록 (각 케이스가 검증하는 동작을 한 줄로)
 - 엣지 케이스 포함 여부와 이유
 
+### 게이트 2.5 — red 완료 후, green 진행 전
+- 작성된 테스트 코드와 red 실패 출력을 제시 → 사용자가 코드 확인 후 승인 → green 진행
+
 ### green + refactor
 승인된 테스트를 통과시키고 리팩토링까지 연속 실행한다. 중간 승인 불필요.
 
 ### 게이트 3 — commit 전
-- 변경된 파일과 diff 요약을 제시 → 사용자 승인 → commit
+- 변경된 파일과 diff 요약을 제시 → 사용자 승인 → commit + push
 - 커밋 메시지는 Conventional Commits (`feat:`, `fix:`, `test:`, `refactor:`, `chore:`)
 
 ### 이원화 규칙
