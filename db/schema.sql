@@ -54,7 +54,8 @@ CREATE TABLE IF NOT EXISTS reviews (
     embedding         vector(1536)
 );
 
--- 시맨틱 검색용 HNSW 인덱스 (코사인 거리)
--- 메타필터 병용 시 recall 저하 가능 → 필요 시 hnsw.ef_search 상향 (ROADMAP.md 참조)
-CREATE INDEX IF NOT EXISTS idx_reviews_embedding_hnsw
-    ON reviews USING hnsw (embedding vector_cosine_ops);
+-- 시맨틱 검색용 IVFFlat 인덱스 (코사인 거리)
+-- HNSW 대신 IVFFlat 채택: 로컬 4GB RAM 제약으로 346k×1536 HNSW 빌드 불가 (ROADMAP.md 참조)
+-- lists ≈ sqrt(346k) ≈ 600, 검색 시 ivfflat.probes로 recall 조정
+CREATE INDEX IF NOT EXISTS idx_reviews_embedding_ivfflat
+    ON reviews USING ivfflat (embedding vector_cosine_ops) WITH (lists = 600);

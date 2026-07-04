@@ -23,8 +23,11 @@ VoC를 분석하는 LangGraph 기반 Slack 챗봇 + 주간 자동 리포트.
 - LangGraph (create_react_agent로 시작 → 재검색 루프 필요 시 커스텀 그래프)
 - LangSmith 무료 티어 (tracing + 평가 기록)
 - 임베딩: 리뷰 1건 = 벡터 1개, 청킹 없음, content만 벡터화 (메타데이터는 필터로)
-- 벡터 인덱스: **HNSW(`vector_cosine_ops`)를 Phase 0 DDL에 포함** (코퍼스 346k 전제).
-  메타필터 + ANN 병용 시 recall 저하 가능 → 필요 시 `hnsw.ef_search` 상향 조정
+- 벡터 인덱스: **IVFFlat(`vector_cosine_ops`, lists=600)를 Phase 0 DDL에 포함**.
+  당초 HNSW로 결정했으나 로컬 개발 머신(RAM 4GB, Docker 가용 ~1.8GB)에서 346k×1536차원
+  HNSW 빌드가 메모리 초과로 20시간+ 소요됨을 실측 확인 → IVFFlat로 변경 (2026-07-05 합의).
+  배포 환경(충분한 RAM)에서는 HNSW 재검토. 메타필터 + ANN 병용 시 recall 저하 가능
+  → 필요 시 `ivfflat.probes` 상향 조정
 - 테이블: reviews 단일 테이블에 category_name/sub_category_name 비정규화 복사(products에서 goods_no 조인해 복사, 실측 조인 미매칭 0건) + products 보조 테이블 유지
 - satisfaction/repurchase: JSONB 저장, 검색 결과 컨텍스트에 포함, 필터/집계에는 미사용 (MVP 이후 검토)
 - **순위/비교 지표: 부정률(grade<=3 비율)의 Wilson lower bound** + min_n(기본 10) 미달 그룹 제외
@@ -42,7 +45,7 @@ VoC를 분석하는 LangGraph 기반 Slack 챗봇 + 주간 자동 리포트.
 ## Phase 0 상세
 
 1. docker-compose.yml: `pgvector/pgvector:pg16` 컨테이너 1개
-2. DDL: reviews(SQLite reviews 컬럼 전체 + category_name/sub_category_name + satisfaction/repurchase JSONB + create_date TIMESTAMPTZ + embedding vector(1536) + HNSW 인덱스), products(SQLite 그대로)
+2. DDL: reviews(SQLite reviews 컬럼 전체 + category_name/sub_category_name + satisfaction/repurchase JSONB + create_date TIMESTAMPTZ + embedding vector(1536) + IVFFlat 인덱스), products(SQLite 그대로)
 3. ingest/: ms_reviews.db 읽기 → 변환 → INSERT. review_id PK upsert로 중복 방지.
    **`ON CONFLICT (review_id) DO UPDATE`에서 embedding 컬럼은 제외** — 재실행 시 기존 임베딩 보존
 4. 임베딩 배치 생성: 미임베딩 행(embedding IS NULL)만 처리, 재실행 안전
