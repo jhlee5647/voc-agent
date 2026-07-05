@@ -1,5 +1,6 @@
-"""eval 파이프라인 테스트 — 사이클 1: 로더/트래젝토리, 사이클 2: 채점기."""
+"""eval 파이프라인 테스트 — 사이클 1: 로더/트래젝토리, 사이클 2: 채점기, 사이클 3: 러너."""
 
+import json
 from collections import Counter
 
 import pytest
@@ -7,8 +8,10 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from eval.run_eval import (
     aggregate,
+    evaluate_item,
     extract_trajectory,
     load_golden,
+    run_all,
     score_answer_qual,
     score_answer_quant,
     score_trajectory,
@@ -191,3 +194,66 @@ def test_aggregate_report():
     assert report["quant_accuracy"] == pytest.approx(2 / 3)
     assert report["judge_avg"] == 3.5
     assert report["passed"] == {"tool_select": False, "quant": False, "judge": True}
+
+
+# --- 사이클 3: 러너 (게이트 2 승인 5케이스) ---
+
+AGG_TC = {"name": "aggregate_reviews", "args": {"metric": "count"}, "id": "c1"}
+
+
+def _messages(answer="답변", tool_calls=None):
+    msgs = [HumanMessage("질문")]
+    if tool_calls:
+        msgs.append(AIMessage("", tool_calls=tool_calls))
+    msgs.append(AIMessage(answer))
+    return msgs
+
+
+def test_evaluate_item_quant():
+    item = _item(ground_truth={"numbers": [{"values": [10], "abs_tol": 0}]})
+    result = evaluate_item(lambda q: _messages("총 10건입니다.", [AGG_TC]), item, judge=None)
+    assert result["tools_ok"] is True
+    assert result["args_ok"] is True
+    assert result["quant_ok"] is True
+    assert result["judge_score"] is None
+
+
+def test_evaluate_item_qual():
+    item = _item(type="qual", expected_tools=[["search_reviews"]], rubric="루브릭")
+    search_tc = {"name": "search_reviews", "args": {"query": "불만", "grade_max": 3}, "id": "c1"}
+    result = evaluate_item(lambda q: _messages("요약", [search_tc]), item, judge=lambda q, r, a: 5)
+    assert result["judge_score"] == 5
+    assert result["quant_ok"] is None
+
+
+def test_evaluate_item_multi_scores_both():
+    item = _item(type="multi", ground_truth={"strings": [["발리안트"]]}, rubric="루브릭")
+    result = evaluate_item(
+        lambda q: _messages("발리안트입니다.", [AGG_TC]), item, judge=lambda q, r, a: 4
+    )
+    assert result["quant_ok"] is True
+    assert result["judge_score"] == 4
+
+
+def test_evaluate_item_agent_error_marks_failure():
+    def broken_agent(question):
+        raise RuntimeError("에이전트 장애")
+
+    item = _item(ground_truth={"numbers": [{"values": [1], "abs_tol": 0}]}, rubric="루브릭")
+    result = evaluate_item(broken_agent, item, judge=lambda q, r, a: 5)
+    assert result["tools_ok"] is False
+    assert result["args_ok"] is False
+    assert result["quant_ok"] is False
+    assert result["judge_score"] == 1  # 장애 문항은 judge 평균에서도 최저점으로 반영
+    assert "error" in result
+
+
+def test_report_json_written(tmp_path):
+    items = [_item(ground_truth={"numbers": [{"values": [1], "abs_tol": 0}]})]
+    out_path = tmp_path / "report.json"
+    report = run_all(
+        lambda q: _messages("1건입니다.", [AGG_TC]), judge=None, items=items, out_path=out_path
+    )
+    loaded = json.loads(out_path.read_text(encoding="utf-8"))
+    assert loaded["summary"] == report["summary"]
+    assert loaded["results"][0]["id"] == "x"

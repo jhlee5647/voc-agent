@@ -87,6 +87,93 @@ def score_answer_qual(item: dict, answer: str, judge) -> int:
     return judge(item["question"], item["rubric"], answer)
 
 
+def evaluate_item(agent_fn, item: dict, judge) -> dict:
+    """문항 1건 평가. agent_fn: 질문 → messages. 에이전트 장애 시 문항만 실패 기록."""
+    result = {"id": item["id"], "type": item["type"]}
+    try:
+        messages = agent_fn(item["question"])
+    except Exception as exc:  # 문항 1건 장애로 평가판 전체가 죽지 않게 격리
+        result.update(
+            tools_ok=False,
+            args_ok=False,
+            quant_ok=False if "ground_truth" in item else None,
+            judge_score=1 if "rubric" in item else None,  # 평균 왜곡 방지 — 최저점 반영
+            error=str(exc),
+        )
+        return result
+    answer = messages[-1].content
+    trajectory = extract_trajectory(messages)
+    result.update(score_trajectory(item, trajectory))
+    result["quant_ok"] = score_answer_quant(item, answer) if "ground_truth" in item else None
+    result["judge_score"] = score_answer_qual(item, answer, judge) if "rubric" in item else None
+    result["answer"] = answer
+    result["trajectory"] = trajectory
+    return result
+
+
+def run_all(agent_fn, judge, items: list[dict] | None = None, out_path=None) -> dict:
+    """전 문항 평가 → {summary, results}. out_path 지정 시 JSON 저장."""
+    items = items if items is not None else load_golden()
+    results = []
+    for item in items:
+        result = evaluate_item(agent_fn, item, judge)
+        results.append(result)
+        print(
+            f"[{result['id']}] tools_ok={result['tools_ok']} args_ok={result['args_ok']} "
+            f"quant_ok={result['quant_ok']} judge={result['judge_score']}"
+        )
+    report = {"summary": aggregate(results), "results": results}
+    if out_path is not None:
+        out_path = Path(out_path)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    return report
+
+
+def make_judge():
+    """실 gpt-4o-mini judge: (question, rubric, answer) → 1~5."""
+    from langchain_openai import ChatOpenAI
+
+    from app.agent.graph import CHAT_MODEL
+
+    model = ChatOpenAI(model=CHAT_MODEL, temperature=0)
+
+    def judge(question: str, rubric: str, answer: str) -> int:
+        prompt = (
+            "너는 리뷰 분석 챗봇의 답변을 채점하는 엄격한 심사자다.\n"
+            f"[질문]\n{question}\n\n[채점 루브릭]\n{rubric}\n\n[챗봇 답변]\n{answer}\n\n"
+            "루브릭 충족도를 1(전혀 충족 못함)~5(완전 충족)의 정수 하나로만 답해라."
+        )
+        text = model.invoke(prompt).content
+        match = re.search(r"[1-5]", text)
+        return int(match.group(0)) if match else 1
+
+    return judge
+
+
+def main() -> None:
+    from datetime import datetime
+
+    from app.agent.graph import build_agent
+    from app.db import get_connection
+
+    with get_connection() as conn:
+        agent = build_agent(conn)
+
+        def agent_fn(question: str):
+            return agent.invoke({"messages": [("user", question)]})["messages"]
+
+        out_path = Path(__file__).parent / "results" / f"{datetime.now():%Y%m%d-%H%M%S}.json"
+        report = run_all(agent_fn, make_judge(), out_path=out_path)
+
+    summary = report["summary"]
+    print(f"\n=== 리포트 ({out_path.name}) ===")
+    print(f"tool 선택률   : {summary['tool_select_rate']:.0%} (기준 ≥90%)")
+    print(f"정량 정답률   : {summary['quant_accuracy']:.0%} (기준 ≥90%)")
+    print(f"judge 평균    : {summary['judge_avg']:.2f} (기준 ≥3.5)")
+    print(f"통과 여부     : {summary['passed']}")
+
+
 def aggregate(results: list[dict]) -> dict:
     """문항별 결과 → 지표 3종 + 통과 기준 판정."""
     tool_select_rate = sum(r["tools_ok"] for r in results) / len(results)
@@ -104,3 +191,7 @@ def aggregate(results: list[dict]) -> dict:
             "judge": judge_avg is not None and judge_avg >= PASS_CRITERIA["judge"],
         },
     }
+
+
+if __name__ == "__main__":
+    main()
