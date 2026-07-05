@@ -101,6 +101,15 @@ def test_no_match_returns_empty_list(vconn):
     assert results == []
 
 
+def test_search_sets_iterative_scan(vconn):
+    # pgvector 0.8 iterative scan — 인덱스 경로에서 필터로 후보가 고갈돼도 LIMIT까지
+    # 계속 스캔해 결과 누락을 막는다 (346k 실측: recall 동등 + 2~4배 빠름).
+    # 동작 자체는 시드 3벡터로 재현 불가 → 세션 설정 계약만 회귀 방어.
+    search_reviews(vconn, "기장 불만", embedder=fake_embedder)
+    setting = vconn.execute("SHOW ivfflat.iterative_scan").fetchone()[0]
+    assert setting == "relaxed_order"
+
+
 def test_similarity_values_exact(vconn):
     results = search_reviews(vconn, "기장 불만", embedder=fake_embedder)
     sims = [r["similarity"] for r in results]

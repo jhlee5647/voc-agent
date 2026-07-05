@@ -92,6 +92,16 @@ def test_group_by_month(conn):
     ]
 
 
+def test_month_groups_sorted_chronologically(conn):
+    # 5/20 이후로 좁히면 5월(5건) < 6월(15건) — 건수 내림차순이라면 [06, 05]로 뒤집힐 상황.
+    # 월 그룹은 metric과 무관하게 시계열(오름차순)이어야 추이 질문에 안전하다.
+    result = aggregate_reviews(conn, date_from="2026-05-20", group_by="month")
+    assert result == [
+        {"group": "2026-05", "n": 5},
+        {"group": "2026-06", "n": 15},
+    ]
+
+
 def test_invalid_group_by_and_metric_rejected(conn):
     with pytest.raises(ValueError):
         aggregate_reviews(conn, group_by="asdf")
