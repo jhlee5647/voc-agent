@@ -5,12 +5,14 @@ signing secret 검증과 url_verification challenge는 bolt 기본 동작에 위
 """
 
 import os
+from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from slack_bolt.adapter.fastapi.async_handler import AsyncSlackRequestHandler
 from slack_bolt.async_app import AsyncApp
 
+from app.report.scheduler import create_scheduler
 from app.slack_handlers import register
 
 load_dotenv()
@@ -21,7 +23,16 @@ bolt_app = AsyncApp(
 )
 register(bolt_app)
 
-api = FastAPI()
+
+@asynccontextmanager
+async def lifespan(_api):
+    scheduler = create_scheduler()
+    scheduler.start()
+    yield
+    scheduler.shutdown(wait=False)
+
+
+api = FastAPI(lifespan=lifespan)
 handler = AsyncSlackRequestHandler(bolt_app)
 
 
