@@ -7,6 +7,9 @@ from pathlib import Path
 import psycopg
 import pytest
 from dotenv import load_dotenv
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import AIMessage
+from langchain_core.outputs import ChatGeneration, ChatResult
 
 load_dotenv()
 
@@ -44,6 +47,29 @@ def seed_rows():
                 }
             )
     return rows
+
+
+class ScriptedChatModel(BaseChatModel):
+    """응답 큐를 순서대로 뱉고, bind_tools 인자와 수신 메시지를 기록하는 가짜 모델."""
+
+    responses: list[AIMessage]
+    bound_tools: list = []
+    received: list = []
+    calls: int = 0
+
+    @property
+    def _llm_type(self) -> str:
+        return "scripted"
+
+    def bind_tools(self, tools, **kwargs):
+        self.bound_tools = list(tools)
+        return self
+
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs) -> ChatResult:
+        self.received.append(list(messages))
+        message = self.responses[self.calls]
+        self.calls += 1
+        return ChatResult(generations=[ChatGeneration(message=message)])
 
 
 def _test_url() -> str:

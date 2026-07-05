@@ -6,34 +6,10 @@ gpt-4o-mini의 실제 tool 선택 품질은 CLI verify와 평가 파이프라인
 
 import json
 
-from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
-from langchain_core.outputs import ChatGeneration, ChatResult
 
 from app.agent.graph import SYSTEM_PROMPT, build_agent
-
-
-class ScriptedChatModel(BaseChatModel):
-    """응답 큐를 순서대로 뱉고, bind_tools 인자와 수신 메시지를 기록하는 가짜 모델."""
-
-    responses: list[AIMessage]
-    bound_tools: list = []
-    received: list = []
-    calls: int = 0
-
-    @property
-    def _llm_type(self) -> str:
-        return "scripted"
-
-    def bind_tools(self, tools, **kwargs):
-        self.bound_tools = list(tools)
-        return self
-
-    def _generate(self, messages, stop=None, run_manager=None, **kwargs) -> ChatResult:
-        self.received.append(list(messages))
-        message = self.responses[self.calls]
-        self.calls += 1
-        return ChatResult(generations=[ChatGeneration(message=message)])
+from tests.conftest import ScriptedChatModel
 
 
 def _agent(conn, responses):
