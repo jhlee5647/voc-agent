@@ -230,7 +230,7 @@ def make_tools(conn, embedder: Callable[[str], list[float]] | None = None) -> li
         metric: count(리뷰 수) | avg_grade(평균 평점) | neg_rate(grade<=3 부정률).
         group_by: brand | category | sub_category | grade | month — 지정 시 그룹별 결과를
         metric 내림차순으로 반환. neg_rate 순위는 Wilson lower bound 기준으로 정렬되며
-        표본 n < min_n인 그룹은 제외된다. 날짜는 YYYY-MM-DD, reviewer_sex는 M/F.
+        표본 n < min_n인 그룹은 제외된다. 날짜는 YYYY-MM-DD, reviewer_sex는 '남성'/'여성'.
         """
         return _dumps(
             aggregate_reviews(
@@ -266,7 +266,8 @@ def make_tools(conn, embedder: Callable[[str], list[float]] | None = None) -> li
 
         query는 찾으려는 내용의 자연어 서술. 메타필터(브랜드/카테고리/중분류/평점/
         날짜/성별)로 좁힐 수 있다. 불만·단점을 찾을 때는 반드시 grade_max=3을 설정할 것
-        (평점 5점이 85.7%라 필터 없이는 긍정 리뷰만 나온다). 날짜는 YYYY-MM-DD.
+        (평점 5점이 85.7%라 필터 없이는 긍정 리뷰만 나온다). 날짜는 YYYY-MM-DD,
+        reviewer_sex는 '남성'/'여성'.
         """
         return _dumps(
             search_reviews(
