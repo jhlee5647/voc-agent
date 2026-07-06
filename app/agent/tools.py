@@ -191,8 +191,12 @@ def list_metadata(
     kind: str,
     search: str | None = None,
     limit: int = 50,
-) -> list[str]:
-    """브랜드/카테고리/중분류 명칭 목록 (리뷰 수 내림차순, ILIKE 부분일치)."""
+) -> list[dict]:
+    """브랜드/카테고리/중분류 명칭·리뷰 수 목록 (리뷰 수 내림차순, ILIKE 부분일치).
+
+    리뷰 수(n)를 함께 반환해 "리뷰가 가장 많은 X" 판단을 LLM이 순서 추측이 아닌
+    명시적 수치로 하게 한다 (eval multi-03 실측 대응).
+    """
     if kind not in _METADATA_COLUMNS:
         raise ValueError(f"kind는 {sorted(_METADATA_COLUMNS)} 중 하나여야 함: {kind!r}")
     column = _METADATA_COLUMNS[kind]
@@ -201,10 +205,11 @@ def list_metadata(
         conds.append(f"{column} ILIKE %s")
         params.append(f"%{search}%")
     sql = (
-        f"SELECT {column} FROM reviews WHERE {' AND '.join(conds)} "
-        f"GROUP BY {column} ORDER BY COUNT(*) DESC LIMIT %s"
+        f"SELECT {column}, COUNT(*) AS n FROM reviews WHERE {' AND '.join(conds)} "
+        f"GROUP BY {column} ORDER BY n DESC LIMIT %s"
     )
-    return [name for (name,) in conn.execute(sql, [*params, limit]).fetchall()]
+    rows = conn.execute(sql, [*params, limit]).fetchall()
+    return [{"name": name, "n": n} for name, n in rows]
 
 
 def make_tools(conn, embedder: Callable[[str], list[float]] | None = None) -> list[BaseTool]:
@@ -293,10 +298,11 @@ def make_tools(conn, embedder: Callable[[str], list[float]] | None = None) -> li
 
     @tool("list_metadata")
     def metadata_tool(kind: str, search: str | None = None, limit: int = 50) -> str:
-        """브랜드/카테고리/중분류 명칭 목록을 리뷰 수 내림차순으로 반환한다.
+        """브랜드/카테고리/중분류의 명칭과 리뷰 수(n)를 리뷰 수 내림차순으로 반환한다.
 
         kind: brand | category | sub_category. search로 부분일치(대소문자 무시) 검색.
-        사용자가 말한 명칭이 데이터의 정확한 명칭인지 불확실하면 먼저 이 tool로 확인할 것.
+        다른 tool에 브랜드/카테고리/중분류 필터를 걸기 전에 먼저 이 tool로 정확한
+        명칭을 확인할 것. "리뷰가 가장 많은 X" 판단에는 반환된 n을 그대로 사용할 것.
         """
         return _dumps(list_metadata(conn, kind, search=search, limit=limit))
 

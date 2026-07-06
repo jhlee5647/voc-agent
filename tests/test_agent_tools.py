@@ -61,4 +61,4 @@ def test_json_is_korean_readable_and_serializes_dates(tools):
 
 def test_list_metadata_invoke(tools):
     raw = tools["list_metadata"].invoke({"kind": "brand", "search": "브랜드"})
-    assert "브랜드A" in json.loads(raw)
+    assert "브랜드A" in [r["name"] for r in json.loads(raw)]
