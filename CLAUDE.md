@@ -64,7 +64,7 @@ ROADMAP.md 구현 순서의 각 항목을 시작할 때, 다음을 제시하고 
 
 ## 시크릿
 
-- `.env`에만 저장: `OPENAI_API_KEY`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `DATABASE_URL`, `SOURCE_DB_PATH`
+- `.env`에만 저장: `OPENAI_API_KEY`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `SLACK_REPORT_CHANNEL`, `DATABASE_URL`, `SOURCE_DB_PATH` (`.env.example` 참조)
 - 코드/커밋/로그에 시크릿 노출 절대 금지
 
 ---
