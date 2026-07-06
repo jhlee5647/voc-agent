@@ -97,6 +97,7 @@ voc_agent/
 
 - eval/golden.jsonl 20문항: 정량 8(정답 SQL 산출→exact/허용오차) / 정성 8(그중 2~3개는 중분류+grade 필터형, LLM-as-judge) / 복합 4(tool 2개 이상)
 - 2단계: (a) tool trajectory(올바른 tool·인자, pytest), (b) 최종 답변(숫자 ground truth, 서술 judge)
+- LLM-as-judge는 self-preference 편향 방지를 위해 에이전트와 다른 상위 모델(gpt-4o) 사용 (2026-07-06 합의)
 - 통과 기준: tool 선택 ≥90%, 정량 정답률 ≥90%, judge 평균 ≥3.5/5
 
 ## 구현 순서

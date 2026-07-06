@@ -6,11 +6,14 @@ from collections import Counter
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+from app.agent.graph import CHAT_MODEL
 from eval.run_eval import (
+    JUDGE_MODEL,
     aggregate,
     evaluate_item,
     extract_trajectory,
     load_golden,
+    parse_judge_score,
     run_all,
     score_answer_qual,
     score_answer_quant,
@@ -194,6 +197,37 @@ def test_aggregate_report():
     assert report["quant_accuracy"] == pytest.approx(2 / 3)
     assert report["judge_avg"] == 3.5
     assert report["passed"] == {"tool_select": False, "quant": False, "judge": True}
+
+
+# --- args_ok 집계 반영 + judge 분리 (게이트 2 승인 5케이스) ---
+
+
+def test_aggregate_args_fail_counts_against_tool_select():
+    # 올바른 tool을 골라도 인자 제약(예: 불만 질의 grade_max=3) 미충족이면 실패로 집계
+    results = [
+        {"type": "quant", "tools_ok": True, "args_ok": True, "quant_ok": True, "judge_score": None},
+        {"type": "qual", "tools_ok": True, "args_ok": False, "quant_ok": None, "judge_score": 4},
+    ]
+    assert aggregate(results)["tool_select_rate"] == 0.5
+
+
+def test_parse_judge_score_score_line():
+    assert parse_judge_score("루브릭을 대부분 충족함.\n점수: 4") == 4
+
+
+def test_parse_judge_score_rationale_digits_not_confused():
+    # rationale-first 형식의 새 위험: 근거 문장의 숫자(3)를 점수로 오인하면 안 됨
+    assert parse_judge_score("3점 이하 리뷰를 인용함.\n점수: 5") == 5
+
+
+def test_parse_judge_score_fallback():
+    assert parse_judge_score("4") == 4  # 점수: 패턴 없음 → 첫 1~5 숫자
+    assert parse_judge_score("채점 불가") == 1  # 숫자 없음 → 최저점
+
+
+def test_judge_model_differs_from_agent():
+    # self-preference 편향 방지 계약 — judge가 에이전트 모델로 회귀하면 실패
+    assert JUDGE_MODEL != CHAT_MODEL
 
 
 # --- 사이클 3: 러너 (게이트 2 승인 5케이스) ---

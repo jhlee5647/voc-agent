@@ -130,23 +130,32 @@ def run_all(agent_fn, judge, items: list[dict] | None = None, out_path=None) -> 
     return report
 
 
+JUDGE_MODEL = "gpt-4o"  # 에이전트(gpt-4o-mini)와 분리 — self-preference 편향 방지
+
+
+def parse_judge_score(text: str) -> int:
+    """judge 응답에서 1~5 점수 추출 — '점수: N' 라인 우선, 폴백은 첫 1~5 숫자, 없으면 1."""
+    match = re.search(r"점수\s*[::]\s*([1-5])", text)
+    if match is not None:
+        return int(match.group(1))
+    match = re.search(r"[1-5]", text)
+    return int(match.group(0)) if match else 1
+
+
 def make_judge():
-    """실 gpt-4o-mini judge: (question, rubric, answer) → 1~5."""
+    """실 judge(gpt-4o): (question, rubric, answer) → 1~5. 근거 서술 후 점수 형식."""
     from langchain_openai import ChatOpenAI
 
-    from app.agent.graph import CHAT_MODEL
-
-    model = ChatOpenAI(model=CHAT_MODEL, temperature=0)
+    model = ChatOpenAI(model=JUDGE_MODEL, temperature=0)
 
     def judge(question: str, rubric: str, answer: str) -> int:
         prompt = (
             "너는 리뷰 분석 챗봇의 답변을 채점하는 엄격한 심사자다.\n"
             f"[질문]\n{question}\n\n[채점 루브릭]\n{rubric}\n\n[챗봇 답변]\n{answer}\n\n"
-            "루브릭 충족도를 1(전혀 충족 못함)~5(완전 충족)의 정수 하나로만 답해라."
+            "루브릭 충족도를 평가하라. 근거를 1~2문장으로 서술한 뒤, 마지막 줄에\n"
+            "'점수: N' 형식으로만 답해라. N은 1(전혀 충족 못함)~5(완전 충족)의 정수다."
         )
-        text = model.invoke(prompt).content
-        match = re.search(r"[1-5]", text)
-        return int(match.group(0)) if match else 1
+        return parse_judge_score(model.invoke(prompt).content)
 
     return judge
 
@@ -175,8 +184,8 @@ def main() -> None:
 
 
 def aggregate(results: list[dict]) -> dict:
-    """문항별 결과 → 지표 3종 + 통과 기준 판정."""
-    tool_select_rate = sum(r["tools_ok"] for r in results) / len(results)
+    """문항별 결과 → 지표 3종 + 통과 기준 판정. 트래젝토리는 tool과 인자 모두 충족해야 통과."""
+    tool_select_rate = sum(r["tools_ok"] and r["args_ok"] for r in results) / len(results)
     quants = [r["quant_ok"] for r in results if r["quant_ok"] is not None]
     quant_accuracy = sum(quants) / len(quants) if quants else None
     scores = [r["judge_score"] for r in results if r["judge_score"] is not None]
