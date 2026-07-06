@@ -52,6 +52,12 @@ def test_tool_call_round_trip(conn):
     assert result["messages"][-1].content == "최종 답변"
 
 
+def test_system_prompt_no_exact_total():
+    # 프롬프트에 정확한 전체 건수가 있으면 LLM이 tool 없이 베껴 답한다 (eval quant-01 실측)
+    assert "346,479" not in SYSTEM_PROMPT
+    assert "346479" not in SYSTEM_PROMPT
+
+
 def test_tool_error_fed_back_not_raised(conn):
     bad_call = AIMessage(
         content="",
