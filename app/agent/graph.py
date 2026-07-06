@@ -10,6 +10,12 @@ from app.agent.tools import make_tools
 
 CHAT_MODEL = "gpt-4o-mini"
 
+# Slack 60초 타임아웃이 워커 스레드를 중단하지 못하므로(비용은 계속 발생),
+# LLM 호출별 상한 + ReAct 스텝 상한으로 폭주 비용의 총량을 유계로 만든다.
+LLM_TIMEOUT_SECONDS = 30  # gpt-4o-mini 정상 응답은 수 초 — 초과는 이상 상황
+LLM_MAX_RETRIES = 1  # HTTP 레벨 재시도 (ROADMAP의 "에이전트 자동 재시도 없음"과 별개)
+RECURSION_LIMIT = 16  # ≈ tool 7회 — 골든셋 최다 경로(재시도 포함 4~5회)에 여유
+
 SYSTEM_PROMPT = """\
 너는 패션 커머스 리뷰(VoC) 분석 어시스턴트다. 마케터의 질문에 리뷰 데이터를 근거로 답한다.
 
@@ -45,11 +51,19 @@ SYSTEM_PROMPT = """\
 """
 
 
+def _default_model() -> ChatOpenAI:
+    """호출 상한이 걸린 기본 모델 (무제한 대기 + 재시도 2회 기본값 사용 금지)."""
+    return ChatOpenAI(
+        model=CHAT_MODEL, temperature=0, timeout=LLM_TIMEOUT_SECONDS, max_retries=LLM_MAX_RETRIES
+    )
+
+
 def build_agent(conn, *, model=None):
     """리뷰 분석 ReAct 에이전트를 컴파일해 반환. model 미지정 시 gpt-4o-mini."""
     if model is None:
-        model = ChatOpenAI(model=CHAT_MODEL, temperature=0)
+        model = _default_model()
     # langgraph v1의 ToolNode는 기본으로 tool 내부 예외를 잡지 않음 — 에러를
     # ToolMessage로 모델에 돌려보내 스스로 인자를 고치게 하려면 명시 필요
     tool_node = ToolNode(make_tools(conn), handle_tool_errors=True)
-    return create_react_agent(model, tool_node, prompt=SYSTEM_PROMPT)
+    agent = create_react_agent(model, tool_node, prompt=SYSTEM_PROMPT)
+    return agent.with_config(recursion_limit=RECURSION_LIMIT)
